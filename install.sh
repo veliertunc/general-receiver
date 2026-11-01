@@ -10,7 +10,10 @@ apt-get update
 apt-get install -y python3 dvb-tools v4l-utils linux-firmware device-tree-compiler
 id receiver >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin --groups video,audio receiver
 install -d -m 0755 /opt/tv-receiver /etc/receiver
-install -m 0755 firmware/receiver.py /opt/tv-receiver/receiver.py
+for module in firmware/*.py; do
+    install -m 0644 "$module" "/opt/tv-receiver/$(basename "$module")"
+done
+chmod 0755 /opt/tv-receiver/receiver.py
 install -m 0644 config/receiver.json /etc/receiver/receiver.json
 touch /etc/receiver/channels.conf
 chown root:video /etc/receiver/channels.conf
@@ -34,5 +37,6 @@ else
 fi
 
 systemctl daemon-reload
-systemctl enable --now tv-receiver.service
+systemctl enable tv-receiver.service
+systemctl restart tv-receiver.service
 echo "Installed. Reboot to activate the Si4703 overlay, then add a dvbv5-compatible channel list at /etc/receiver/channels.conf."

@@ -20,9 +20,17 @@ The CM4 and Si2168 capabilities are documented by their manufacturers: [Raspberr
 
 ## What the firmware does
 
-`firmware/receiver.py` is the appliance control and streaming service. It uses Linux's DVB device API through `dvbv5-zap`, V4L2 radio tuning through `v4l2-ctl`, and ordinary Linux Ethernet sockets. The kernel tuner drivers perform the hardware control and demodulation.
+The software is split into three independent receiver services, with `firmware/receiver.py` acting only as the HTTP API/router:
+
+- `firmware/television_service.py` checks the DVB frontend and starts `dvbv5-zap` for a channel stream.
+- `firmware/radio_service.py` checks and tunes the FM device through V4L2.
+- `firmware/ethernet_service.py` reports network interfaces and joins multicast groups to receive MPEG-TS.
+- `firmware/settings.py` loads shared configuration. Each media service can be imported and used independently of the HTTP server.
+
+Linux's DVB device API, V4L2 radio API, and Ethernet sockets handle the hardware interface; kernel drivers perform tuner control and demodulation.
 
 - `GET /status` reports whether the DVB frontend and FM radio device are present and lists network interfaces.
+- `GET /tv/status`, `/radio/status`, and `/ethernet/status` return status for an individual subsystem.
 - `GET /tv.ts?channel=NAME` tunes a named DVB service from `channels.conf` and returns its MPEG transport stream over HTTP.
 - `POST /radio/tune` with `{"frequency_mhz": 99.5}` tunes `/dev/radio0`. Audio is available at the Si4703 analog output; this endpoint does not digitize FM audio.
 - `GET /udp.ts?group=239.1.1.1&port=1234` joins an IPv4 multicast group on Ethernet and relays the received MPEG-TS datagrams over HTTP.
