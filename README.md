@@ -36,11 +36,13 @@ Linux's DVB device API, V4L2 radio API, and Ethernet sockets handle the hardware
 - `POST /radio/tune` with `{"frequency_mhz": 99.5}` tunes `/dev/radio0`. Audio is available at the Si4703 analog output; this endpoint does not digitize FM audio.
 - `GET /udp.ts?group=239.1.1.1&port=1234` joins an IPv4 multicast group on Ethernet and relays the received MPEG-TS datagrams over HTTP.
 
-The selected DVB hardware has one frontend, so serve one tuned broadcast TV service at a time. Each `/tv.ts` request starts its own tuner process; simultaneous TV clients may compete for that frontend.
+The selected DVB hardware has one frontend, so serve one tuned broadcast TV service at a time. The service reserves the configured adapter while streaming and returns HTTP 409 for competing TV requests. It releases the reservation and closes the tuner process when a stream ends. This reservation applies within the receiver process; avoid running other tuner applications against the same adapter concurrently.
 
 This is the application firmware for the stated scope, plus a reference device-tree overlay; it is not a TV codec, kernel, tuner module, or production board design. TV picture/audio decoding and HDMI output are provided by the Linux media/player stack on the CM4 (for example, connect a compatible client to the MPEG-TS URL). The HTTP service streams transport streams; it does not implement a web UI, conditional access, service scan UI, recording database, or transcoding. The service has no authentication; keep it on a trusted LAN or add access control before exposing it to an untrusted network.
 
 ## Build and install
+
+Check the separate configuration files before deployment with `python firmware/receiver.py --config-dir config --check-config`. This checks settings without opening a network port or accessing receiver hardware. The installer also checks configuration and preserves existing component configuration files during upgrades.
 
 No cross-compiler is needed; the firmware is Python 3 and uses system Linux media tools. On a fresh 64-bit Raspberry Pi OS Lite installation on the CM4 carrier:
 

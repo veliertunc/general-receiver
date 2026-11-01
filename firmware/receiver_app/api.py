@@ -19,12 +19,12 @@ class ReceiverHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def stream(self, source):
-        self.send_response(200)
-        self.send_header("Content-Type", "video/mp2t")
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Connection", "close")
-        self.end_headers()
         try:
+            self.send_response(200)
+            self.send_header("Content-Type", "video/mp2t")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            self.end_headers()
             while True:
                 chunk = source.read()
                 if not chunk:
@@ -54,6 +54,8 @@ class ReceiverHandler(BaseHTTPRequestHandler):
         elif route.path == "/tv.ts":
             try:
                 self.stream(television.open_channel(query.get("channel", [""])[0], self.config["television"]))
+            except television.TunerBusyError as error:
+                self.send_json(409, {"error": str(error)})
             except ValueError as error:
                 self.send_json(400, {"error": str(error)})
             except (OSError, RuntimeError) as error:

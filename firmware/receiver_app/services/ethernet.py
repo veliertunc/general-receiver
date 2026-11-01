@@ -22,9 +22,9 @@ class MulticastStream:
             address = ipaddress.ip_address(group)
         except ValueError as error:
             raise ValueError("Use an IPv4 multicast group in 239.0.0.0/8") from error
-        allowed_network = ipaddress.ip_network(config.get("multicast_cidr", "239.0.0.0/8"))
+        allowed_network = ipaddress.ip_network(config.get("multicast_cidr", "239.0.0.0/8"), strict=False)
         if address.version != 4 or address not in allowed_network:
-            raise ValueError("Use an IPv4 multicast group in 239.0.0.0/8")
+            raise ValueError(f"Use an IPv4 multicast group in {allowed_network}")
         if not 1 <= port <= 65535:
             raise ValueError("UDP port must be between 1 and 65535")
 

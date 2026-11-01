@@ -2,6 +2,14 @@
 import os
 import shutil
 import subprocess
+import threading
+
+_tuners = set()
+_tuners_lock = threading.Lock()
+
+
+class TunerBusyError(RuntimeError):
+    pass
 
 
 def validate_config(config):
@@ -20,21 +28,40 @@ class TelevisionStream:
         tool = shutil.which("dvbv5-zap")
         if not tool:
             raise RuntimeError("Required system program is missing: dvbv5-zap")
-        self.process = subprocess.Popen(
-            [tool, "-a", str(config.get("adapter", 0)), "-c", config["channels_file"], "-o", "-", channel],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        self.adapter = config.get("adapter", 0)
+        self.closed = False
+        with _tuners_lock:
+            if self.adapter in _tuners:
+                raise TunerBusyError("The television tuner is already streaming")
+            _tuners.add(self.adapter)
+        try:
+            self.process = subprocess.Popen(
+                [tool, "-a", str(self.adapter), "-c", config["channels_file"], "-o", "-", channel],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        except Exception:
+            with _tuners_lock:
+                _tuners.discard(self.adapter)
+            raise
 
     def read(self, size=188 * 128):
         return self.process.stdout.read(size)
 
     def close(self):
-        if self.process.poll() is None:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-                self.process.wait()
+        if self.closed:
+            return
+        self.closed = True
+        try:
+            if self.process.poll() is None:
+                self.process.terminate()
+                try:
+                    self.process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    self.process.kill()
+                    self.process.wait()
+            self.process.stdout.close()
+        finally:
+            with _tuners_lock:
+                _tuners.discard(self.adapter)
 
 
 def status(config):
