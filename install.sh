@@ -17,7 +17,9 @@ done
 for module in firmware/receiver_app/services/*.py; do
     install -m 0644 "$module" "/opt/tv-receiver/receiver_app/services/$(basename "$module")"
 done
-install -m 0644 config/receiver.json /etc/receiver/receiver.json
+for component in api television radio ethernet; do
+    install -m 0644 "config/$component.json" "/etc/receiver/$component.json"
+done
 touch /etc/receiver/channels.conf
 chown root:video /etc/receiver/channels.conf
 chmod 0640 /etc/receiver/channels.conf

@@ -4,6 +4,15 @@ import shutil
 import subprocess
 
 
+def validate_config(config):
+    adapter = config.get("adapter", 0)
+    if isinstance(adapter, bool) or not isinstance(adapter, int) or adapter < 0:
+        raise ValueError("adapter must be a non-negative integer")
+    channels_file = config.get("channels_file")
+    if not isinstance(channels_file, str) or not channels_file.startswith("/"):
+        raise ValueError("channels_file must be an absolute path")
+
+
 class TelevisionStream:
     def __init__(self, channel, config):
         if not channel or len(channel) > 128:

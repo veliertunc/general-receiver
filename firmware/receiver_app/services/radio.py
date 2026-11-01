@@ -4,6 +4,20 @@ import shutil
 import subprocess
 
 
+def validate_config(config):
+    device = config.get("device")
+    if not isinstance(device, str) or not device.startswith("/"):
+        raise ValueError("device must be an absolute device path")
+    band = config.get("fm_range_mhz", [87.5, 108.0])
+    if not isinstance(band, list) or len(band) != 2:
+        raise ValueError("fm_range_mhz must contain a lower and upper frequency")
+    if any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in band):
+        raise ValueError("fm_range_mhz values must be numbers")
+    low, high = map(float, band)
+    if not 0 < low < high:
+        raise ValueError("fm_range_mhz must be an increasing positive range")
+
+
 def status(config):
     device = config["device"]
     return {"device": device, "available": os.path.exists(device)}

@@ -8,7 +8,7 @@ Type=simple
 User=receiver
 Group=video
 SupplementaryGroups=audio
-Environment=RECEIVER_CONFIG=/etc/receiver/receiver.json
+Environment=RECEIVER_CONFIG_DIR=/etc/receiver
 ExecStart=/usr/bin/python3 /opt/tv-receiver/receiver.py
 Restart=on-failure
 RestartSec=2

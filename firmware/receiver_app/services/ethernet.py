@@ -3,6 +3,15 @@ import ipaddress
 import socket
 
 
+def validate_config(config):
+    network = ipaddress.ip_network(config.get("multicast_cidr", "239.0.0.0/8"), strict=False)
+    if network.version != 4 or not network.is_multicast:
+        raise ValueError("multicast_cidr must be an IPv4 multicast network")
+    interface = ipaddress.ip_address(config.get("multicast_interface", "0.0.0.0"))
+    if interface.version != 4:
+        raise ValueError("multicast_interface must be an IPv4 address")
+
+
 def status():
     return {"interfaces": [{"index": index, "name": name} for index, name in socket.if_nameindex()]}
 

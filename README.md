@@ -26,7 +26,7 @@ The software is organized as a package. `firmware/receiver.py` is a small startu
 - `services/radio.py` checks and tunes the FM device through V4L2.
 - `services/ethernet.py` reports network interfaces and joins multicast groups to receive MPEG-TS.
 
-Configuration is passed into service calls rather than loaded globally, so a subsystem can be imported and used without starting the HTTP server. The configuration file separates `api`, `television`, `radio`, and `ethernet` settings into independent sections.
+Configuration is passed into service calls rather than loaded globally, so a subsystem can be imported and used without starting the HTTP server. Each component has a separate file: `config/api.json`, `config/television.json`, `config/radio.json`, and `config/ethernet.json`. The installer places them in `/etc/receiver/`; set `RECEIVER_CONFIG_DIR` to a different directory to load another set. Startup validates each subsystem's settings and identifies the section that needs correction if a value is invalid.
 
 Linux's DVB device API, V4L2 radio API, and Ethernet sockets handle the hardware interface; kernel drivers perform tuner control and demodulation.
 
