@@ -1,0 +1,22 @@
+[Unit]
+Description=TV, FM radio and Ethernet receiver service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=receiver
+Group=video
+SupplementaryGroups=audio
+Environment=RECEIVER_CONFIG=/etc/receiver/receiver.json
+ExecStart=/usr/bin/python3 /opt/tv-receiver/receiver.py
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

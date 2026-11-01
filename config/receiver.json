@@ -1,0 +1,8 @@
+{
+  "listen_address": "0.0.0.0",
+  "listen_port": 8080,
+  "channels_file": "/etc/receiver/channels.conf",
+  "radio_device": "/dev/radio0",
+  "fm_range_mhz": [87.5, 108.0],
+  "multicast_interface": "0.0.0.0"
+}
