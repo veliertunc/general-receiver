@@ -36,6 +36,12 @@ There is no Python source in the application. Shell scripts handle building, ins
 
 ## Build the C application
 
+Linux UAPI sources are pinned as the `third_party/linux` Git submodule at Linux v6.12 (commit `adc218676eef25575469234709c2d87185ca223a`). They supply DVB and V4L2 headers. C library/POSIX headers such as `pthread.h` and `sys/socket.h` come from the Linux toolchain/sysroot, not the kernel submodule.
+
+The local checkout uses sparse paths `include`, `arch/arm64`, and `scripts`. For a fresh clone, initialize on Linux/WSL with `git submodule update --init --depth 1 third_party/linux`. A full Linux checkout contains names incompatible with Windows; use WSL for new checkouts. Export sanitized userspace headers with `sh tools/export-linux-headers.sh arm64` (requires Linux make, a host C compiler, rsync and the kernel's header-export dependencies). Never point the compiler directly at kernel-private `include/linux` headers.
+
+Open the repository in VS Code through Remote WSL. The checked-in `.vscode` settings provide Linux host and CM4 AArch64 IntelliSense configurations, CMake compilation commands, build/check tasks and extension recommendations. Install GCC, CMake and the GNU AArch64 Linux toolchain inside WSL as needed. The CM4 IntelliSense configuration uses `build/linux-uapi/include` after export. To compile against those exported headers, pass `-DRECEIVER_UAPI_INCLUDE_DIR=/absolute/path/to/build/linux-uapi/include` together with the AArch64 CMake toolchain. Native host builds use their installed Linux headers.
+
 On Linux with GCC or Clang, CMake, POSIX threads and Linux media headers:
 
 ```sh

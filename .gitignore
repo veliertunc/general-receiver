@@ -28,7 +28,11 @@ dist/
 !.env.example
 config/local/
 *.log
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/c_cpp_properties.json
+!.vscode/tasks.json
+!.vscode/extensions.json
 .idea/
 *.swp
 Thumbs.db

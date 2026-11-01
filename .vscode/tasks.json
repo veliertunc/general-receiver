@@ -1,0 +1,9 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {"label": "Export CM4 Linux headers", "type": "shell", "command": "sh tools/export-linux-headers.sh arm64", "problemMatcher": []},
+    {"label": "Configure Linux host", "type": "shell", "command": "cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON", "problemMatcher": "$gcc"},
+    {"label": "Build receiver", "type": "shell", "command": "cmake --build build --parallel", "dependsOn": "Configure Linux host", "group": {"kind": "build", "isDefault": true}, "problemMatcher": "$gcc"},
+    {"label": "Check C receiver", "type": "shell", "command": "sh tools/check-host.sh", "problemMatcher": "$gcc"}
+  ]
+}
