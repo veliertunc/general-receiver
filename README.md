@@ -1,73 +1,113 @@
-# Television, FM radio and Ethernet receiver
+# C television, FM radio and Ethernet receiver firmware
 
-This repository contains a Linux receiver service and a reference hardware design. The target is a set-top receiver for **DVB-T, DVB-T2 and DVB-C television**, **analog FM broadcast radio**, and **Ethernet/IP transport streams**. Ethernet also carries the HTTP control and MPEG-TS streaming interface.
+The application is written entirely in C11. It targets a **Raspberry Pi Compute Module 4 with embedded Linux**, boots from eMMC or microSD, and receives DVB-T/T2/C television, FM radio, and IPv4 multicast MPEG transport streams over Ethernet. Python and external tuner programs are no longer runtime dependencies.
 
-## Selected chips and modules
+This is an embedded Linux firmware project. Its deployable artifact is a disk image containing the boot firmware, Linux kernel, drivers, filesystem and compiled C receiver. It is not a bare-metal MCU binary. Linux drivers and vendor demodulator firmware remain necessary; rewriting the application in C does not replace them.
 
-| Function | Selected part | Notes |
+## Hardware to use
+
+| Function | Selected hardware | Connection / reason |
 | --- | --- | --- |
-| Host processor, memory and boot | Raspberry Pi Compute Module 4, 2 GB | Quad-core 64-bit Linux host with hardware video decode support. Use the Lite version with carrier-board eMMC or the eMMC version. |
-| Terrestrial/cable RF tuner | Silicon Labs Si2157-A20 on a DVB tuner module | RF tuner; use only a module whose exact tuner and demodulator combination is supported by the target Linux kernel. |
-| DVB demodulator | Silicon Labs Si2168-B40 on the same module | DVB-T/T2/C demodulation. Linux has `si2168` and `si2157` media drivers. The module must provide a supported USB or parallel transport-stream connection; USB tuner modules avoid routing a high-speed TS bus on the carrier. |
-| FM tuner | Silicon Labs Si4703 | Separate 76–108 MHz FM receiver, I²C control, analog L/R audio output. Use a module with a proper antenna network and audio coupling. |
-| Ethernet | CM4 Ethernet MAC plus carrier-board Gigabit Ethernet PHY (Microchip LAN7800 USB-to-Ethernet is an alternative) | CM4 needs a carrier board with PHY, magnetics, RJ45 and ESD protection to expose wired Ethernet. |
-| FM audio output | Si4703 analog output to line-level audio jack or amplifier | Add AC coupling, volume/ mute circuitry and an amplifier if a speaker output is required. |
-| Storage / OS | CM4 eMMC or carrier-board microSD; Raspberry Pi OS Lite 64-bit | Linux owns DVB, Ethernet, USB, I²C and process scheduling. |
+| Compute module | CM4, BCM2711 SoC, 2 GB RAM, 16 GB eMMC, without wireless (CM4002016) | Enough resources for Linux media drivers and transport streams; eMMC is the firmware storage. Use a CM4 Lite with microSD during prototyping if preferred. |
+| Prototype carrier | Official CM4 IO Board | Provides power, USB host, Ethernet connector, HDMI, GPIO and boot access. Follow its documented power input requirements. |
+| Television receiver | Hauppauge WinTV-soloHD, European DVB-T/T2/C version | A concrete USB tuner supported by Linux. Verify the exact hardware revision/USB ID before purchasing; US ATSC products are different. |
+| TV silicon reference | Si2168 demodulator, Si2157-family RF tuner, eMPIA EM28xx USB bridge | Supported driver families; use the assembled USB tuner rather than a custom bare-chip RF board. Actual tuner silicon/firmware varies by product revision. |
+| FM receiver | Si4703 breakout exposing SDA, SCL, reset and GPIO2/interrupt | I2C control, FM antenna input, analog stereo output. A board exposing only I2C without IRQ is unsuitable for the supplied Linux overlay. |
+| Ethernet PHY | Broadcom BCM54210PE already on CM4 | The carrier supplies magnetics/RJ45 and protection. An additional Ethernet PHY is not needed. This corrects the earlier hardware table. |
+| FM audio | Si4703 analog L/R into powered speakers or an external line-level amplifier | CM4 has no built-in analog audio input. FM streaming would require an added ADC/USB sound interface and a capture implementation. |
 
-The Si2168 is a DVB demodulator, not the RF tuner; the Si2157 is its matching RF front end. The Si4703 is a distinct FM-only receiver. FM audio comes out as analog audio. This design does not claim DAB, satellite TV (DVB-S/S2), ATSC, DRM, or analog television support. A tuner module is a critical dependency: buy one with documented Si2168/Si2157 silicon, Linux driver support, reference clock/reset arrangement, and a supported USB bridge before laying out a carrier board. Bare QFN chips are not plug-and-play.
+Sources: [CM4 datasheet](https://datasheets.raspberrypi.com/cm4/cm4-datasheet.pdf), [Hauppauge Linux tuner support](https://support.hauppauge.com/pages/support/support_linux.html), [Linux EM28xx device list](https://cdn.kernel.org/doc/html/latest/admin-guide/media/em28xx-cardlist.html), [Si470x device-tree binding](https://code.googlesource.com/linux/torvalds/linux/%2B/793582ff47f8b73be8d3d925d750bf3ef79f33c7/Documentation/devicetree/bindings/media/silabs%2Csi470x.yaml).
 
-The CM4 and Si2168 capabilities are documented by their manufacturers: [Raspberry Pi CM4 product information](https://www.raspberrypi.com/products/compute-module-4/), [Si2168 DVB-T2/T/C product brief](https://www.mouser.com/datasheet/2/472/silcs01678_1-2492605.pdf), and [Linux Si2168 driver](https://github.com/torvalds/linux/blob/master/drivers/media/dvb-frontends/si2168.h). The upstream tuner driver currently reports that Si2157 does not support FM, which is why this design uses a separate Si4703 for FM ([Linux si2157 driver](https://github.com/torvalds/linux/blob/master/drivers/media/tuners/si2157.c)).
+The RF standard assumed here is DVB-T/T2/C and analog FM. Satellite, ATSC, DAB, encrypted channels and analog television are outside this implementation. TV output is a complete multiplex transport stream over HTTP; a player selects and decodes a service from it. Local HDMI viewing requires a separately configured media player. The receiver does not implement video codecs or a display UI.
 
-## What the firmware does
+## C source layout
 
-The software is organized as a package. `firmware/receiver.py` is a small startup entry point; `firmware/receiver_app/main.py` loads configuration; `firmware/receiver_app/api.py` owns HTTP routes; and `firmware/receiver_app/services/` contains the independently callable hardware services:
+| File | Responsibility |
+| --- | --- |
+| `firmware/c/main.c` | Bounded HTTP server, request parsing, streaming, shutdown |
+| `firmware/c/config.c` | Configuration defaults, parsing and validation |
+| `firmware/c/television.c` | DVBv5 tuning, lock timeout, demux/DVR stream, exclusive tuner ownership |
+| `firmware/c/radio.c` | V4L2 FM tuning and unmute; retains the radio handle to keep audio powered |
+| `firmware/c/ethernet.c` | Multicast membership and interface enumeration |
+| `firmware/c/receiver.h` | Shared C interfaces |
+| `buildroot/` | External package, kernel fragment and image integration |
 
-- `services/television.py` checks the DVB frontend and starts `dvbv5-zap` for a channel stream.
-- `services/radio.py` checks and tunes the FM device through V4L2.
-- `services/ethernet.py` reports network interfaces and joins multicast groups to receive MPEG-TS.
+There is no Python source in the application. Shell scripts handle building, installation and boot startup.
 
-Configuration is passed into service calls rather than loaded globally, so a subsystem can be imported and used without starting the HTTP server. Each component has a separate file: `config/api.json`, `config/television.json`, `config/radio.json`, and `config/ethernet.json`. The installer places them in `/etc/receiver/`; set `RECEIVER_CONFIG_DIR` to a different directory to load another set. Startup validates each subsystem's settings and identifies the section that needs correction if a value is invalid.
+## Build the C application
 
-Linux's DVB device API, V4L2 radio API, and Ethernet sockets handle the hardware interface; kernel drivers perform tuner control and demodulation.
+On Linux with GCC or Clang, CMake, POSIX threads and Linux media headers:
 
-- `GET /status` reports whether the DVB frontend and FM radio device are present and lists network interfaces.
-- `GET /tv/status`, `/radio/status`, and `/ethernet/status` return status for an individual subsystem.
-- `GET /tv.ts?channel=NAME` tunes a named DVB service from `channels.conf` and returns its MPEG transport stream over HTTP.
-- `POST /radio/tune` with `{"frequency_mhz": 99.5}` tunes `/dev/radio0`. Audio is available at the Si4703 analog output; this endpoint does not digitize FM audio.
-- `GET /udp.ts?group=239.1.1.1&port=1234` joins an IPv4 multicast group on Ethernet and relays the received MPEG-TS datagrams over HTTP.
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+./build/receiver --config config/receiver.conf --check-config
+```
 
-The selected DVB hardware has one frontend, so serve one tuned broadcast TV service at a time. The service reserves the configured adapter while streaming and returns HTTP 409 for competing TV requests. It releases the reservation and closes the tuner process when a stream ends. This reservation applies within the receiver process; avoid running other tuner applications against the same adapter concurrently.
+Run `sh tools/check-host.sh` on Linux for strict C compilation and HTTP/configuration checks without RF hardware. These checks do not validate the kernel drivers, RF lock, FM audio, or boot image.
 
-This is the application firmware for the stated scope, plus a reference device-tree overlay; it is not a TV codec, kernel, tuner module, or production board design. TV picture/audio decoding and HDMI output are provided by the Linux media/player stack on the CM4 (for example, connect a compatible client to the MPEG-TS URL). The HTTP service streams transport streams; it does not implement a web UI, conditional access, service scan UI, recording database, or transcoding. The service has no authentication; keep it on a trusted LAN or add access control before exposing it to an untrusted network.
+On Raspberry Pi OS Lite 64-bit, run `sudo sh install.sh` from this repository to build and install the C binary and systemd service. Existing `/etc/receiver` configuration files are preserved. If an earlier Python installation exists, the new systemd unit replaces its startup command; the legacy `/opt/tv-receiver` files are unused.
 
-## Build and install
+To cross-compile the application with an installed GNU AArch64 Linux toolchain, configure CMake with `-DCMAKE_TOOLCHAIN_FILE=cmake/aarch64-linux.cmake`. Match the target's C library/sysroot; the binary alone does not include Linux, drivers or boot firmware. Buildroot supplies its own matched cross toolchain when building the image.
 
-Check the separate configuration files before deployment with `python firmware/receiver.py --config-dir config --check-config`. This checks settings without opening a network port or accessing receiver hardware. The installer also checks configuration and preserves existing component configuration files during upgrades.
+## Radio wiring and kernel configuration
 
-No cross-compiler is needed; the firmware is Python 3 and uses system Linux media tools. On a fresh 64-bit Raspberry Pi OS Lite installation on the CM4 carrier:
+For the supplied `hardware/receiver-si4703-overlay.dts`, wire Si4703 SDA/SCL to CM4 GPIO2/3, active-low RESET to GPIO17, and the chip's GPIO2/IRQ output to CM4 GPIO24. Use 3.3 V logic, a common ground and the breakout vendor's supply/antenna/audio instructions. Ensure the module starts in two-wire I2C mode at address 0x10; its strap/reset requirements depend on the breakout.
 
-1. Connect a supported Si2168/Si2157 DVB-T/T2/C tuner module and a Si4703 FM module. Ensure the FM tuner is enabled on the I²C bus in the device tree and that the kernel exposes it as `/dev/radio0`.
-2. For the reference CM4 I/O Board wiring, connect Si4703 SDA/SCL to I²C1 (GPIO2/3), IRQ to GPIO24, and active-low RESET to GPIO17. Use 3.3 V logic. If your module/carrier uses different pins, edit `hardware/receiver-si4703-overlay.dts` before installation. The Linux Si470x I²C driver requires its IRQ input; wire the module's GPIO2/IRQ output.
-3. Copy this repository to the device and run `sudo ./install.sh`. It compiles and enables the reference device-tree overlay when the standard Raspberry Pi OS boot configuration is present. Reboot to bind the radio driver.
-4. Scan your local DVB network with `dvbv5-scan` and place the resulting dvbv5 channel list at `/etc/receiver/channels.conf`. Channel names in that file are used by the `/tv.ts` endpoint.
-5. Check `systemctl status tv-receiver` and open `http://DEVICE_IP:8080/status`.
+On Raspberry Pi OS, compile the overlay:
 
-The installer uses Debian/Raspberry Pi OS packages `dvb-tools`, `v4l-utils`, `linux-firmware`, and `device-tree-compiler`. Some distributions package tuner firmware separately; install any firmware requested by the kernel in the distribution's supported firmware directory. The radio driver needs to create `/dev/radio0`; Linux's Si470x I²C driver needs an interrupt line, configured by the supplied overlay for the reference wiring. The overlay is specific to a BCM2711 CM4 board; use the carrier manufacturer's I²C and GPIO mapping on other boards.
+```sh
+sudo dtc -@ -I dts -O dtb -o /boot/firmware/overlays/receiver-si4703.dtbo hardware/receiver-si4703-overlay.dts
+```
 
-Example calls:
+Add the following under an `[all]` section in `/boot/firmware/config.txt`, then reboot:
+
+```ini
+dtparam=i2c_arm=on
+dtoverlay=receiver-si4703
+otg_mode=1
+```
+
+The kernel must enable the Si470x I2C radio driver. The Buildroot kernel fragment requests it. On a prebuilt OS, check the kernel configuration and install/build the driver if absent. The overlay alone cannot add a missing kernel driver. Confirm `/dev/radio0` and `/dev/dvb/adapter0/frontend0` appear before expecting reception.
+
+## Configuration and reception
+
+`config/receiver.conf` is installed at `/etc/receiver/receiver.conf`. It configures API address/port, DVB adapter, radio device and FM band, multicast interface address, and the tuning/idle timeout. The default HTTP port is 8080, maximum active clients is 16, and multicast is restricted to 239.0.0.0/8. Keep the service on a trusted LAN; authentication and TLS are not implemented.
+
+`/etc/receiver/channels.conf` now uses a simple C-native format, **not the earlier dvbv5 channel-file format**:
+
+```text
+# name delivery_system frequency_Hz bandwidth_Hz symbol_rate
+News DVB-T2 514000000 8000000 0
+Cable DVB-C 450000000 8000000 6900000
+```
+
+These are examples, not verified local broadcast frequencies. Each name identifies a multiplex. Replace the entries with the frequency, bandwidth and symbol rate used by your broadcaster. DVB-T/T2 uses automatic modulation; DVB-C uses Annex A and automatic QAM detection, which depends on driver support. Explicit PLP selection, channel scanning and service PID filtering are not implemented.
 
 ```sh
 curl http://DEVICE_IP:8080/status
+curl http://DEVICE_IP:8080/ethernet/status
 curl -N 'http://DEVICE_IP:8080/tv.ts?channel=News'
-curl -X POST -H 'Content-Type: application/json' \
-  -d '{"frequency_mhz":99.5}' http://DEVICE_IP:8080/radio/tune
+curl -X POST -H 'Content-Type: application/json' -d '{"frequency_mhz":99.5}' http://DEVICE_IP:8080/radio/tune
 curl -N 'http://DEVICE_IP:8080/udp.ts?group=239.1.1.1&port=1234'
 ```
 
-The radio request tunes the station; listen through the line output wired from the Si4703. IPTV multicast must already be present on the selected Ethernet/VLAN and must use MPEG-TS datagrams. Only multicast in `239.0.0.0/8` is accepted by the relay.
+The FM request accepts a JSON object containing only `frequency_mhz`; audio comes from the radio board's analog output. Concurrent TV requests receive 409. Signal acquisition failure returns 503 before streaming begins. An established stream closes after the configured idle timeout; stalled clients have send/receive timeouts. Multicast input must carry plain MPEG-TS, not RTP-encapsulated TS.
 
-## Hardware notes before manufacture
+## Build a flashable image
 
-Use the tuner module vendor's reference design for RF matching, SAW filtering, crystal, power rails, clocking, reset, and I²C address selection. Give the TV and FM antennas suitable 50/75-ohm input networks and protect exposed connectors against ESD. Use regulated rails sized for the CM4 peak current, sequence rails as required by each module, and keep switching supplies away from the RF front ends. The carrier must provide the CM4 high-density connectors, Ethernet PHY/magnetics, USB host for the DVB module, I²C and GPIO interrupt/reset lines for Si4703, and audio output circuitry. Verify the local broadcast standard and antenna system before choosing regional band filters or scanning frequencies.
+Use a Linux build host with Buildroot's documented dependencies. The external tree layers onto the upstream `raspberrypi4_64_defconfig`, which includes CM4 device trees. Pin and record the Buildroot release/commit used for a product build; this integration has not yet completed a full image build.
 
-This reference has not been tested on physical hardware. Validate the exact tuner module, Linux kernel drivers, required firmware files and local broadcast parameters on a bench prototype before committing to a production PCB.
+From a checked-out Buildroot tree:
+
+```sh
+sh /path/to/television-receiver/tools/build-image.sh /path/to/television-receiver
+```
+
+The intended output is `output/images/sdcard.img`. The image recipe adds the C application, BusyBox init startup, CM4 boot selection, radio overlay and media driver configuration. Ethernet uses the upstream board's DHCP setup. The recipe is based on the [upstream Pi 4 64-bit configuration](https://github.com/buildroot/buildroot/blob/master/configs/raspberrypi4_64_defconfig); verify selected kernel symbols and generated boot files against your pinned Buildroot version.
+
+**Vendor firmware is required for many USB tuner revisions.** Obtain the exact blobs named by the kernel from the tuner manufacturer's Linux support page, and place them under `buildroot/board/overlay/lib/firmware/` before building. They are not generated from this application's C source and are not bundled here. Check redistribution terms before shipping an image containing them. Missing blobs allow the OS to boot but prevent TV reception.
+
+For a CM4 Lite, write `sdcard.img` to a microSD card using Raspberry Pi Imager's custom-image option. For an eMMC CM4, fit the CM4 IO Board's nRPIBOOT jumper, connect the documented USB slave port, run Raspberry Pi's `rpiboot` to expose eMMC, and write the custom image to that exposed device. Remove the boot jumper and power-cycle afterward. Writing an image erases the selected storage; verify the device before flashing. Follow [Raspberry Pi's eMMC flashing instructions](https://www.raspberrypi.com/documentation/computers/compute-module.html).
+
+The project currently supplies C source and image build inputs, **not a built or hardware-validated image**. Verify kernel driver selection, tuner firmware loading, TV signal lock, FM analog output, DHCP/multicast and reboot behavior on the selected hardware before treating an image as production firmware.

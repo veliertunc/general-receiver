@@ -1,5 +1,0 @@
-{
-  "adapter": 0,
-  "channels_file": "/etc/receiver/channels.conf",
-  "standards": ["DVB-T", "DVB-T2", "DVB-C"]
-}

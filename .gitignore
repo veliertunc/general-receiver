@@ -8,7 +8,14 @@ venv/
 htmlcov/
 
 # Build outputs and captured media
+*.o
+*.a
+*.so
+compile_commands.json
 build/
+output/
+*.img
+buildroot/board/overlay/lib/firmware/*.fw
 dist/
 *.egg-info/
 *.dtbo
