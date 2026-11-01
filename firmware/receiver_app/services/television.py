@@ -12,7 +12,7 @@ class TelevisionStream:
         if not tool:
             raise RuntimeError("Required system program is missing: dvbv5-zap")
         self.process = subprocess.Popen(
-            [tool, "-a", "0", "-c", config["channels_file"], "-o", "-", channel],
+            [tool, "-a", str(config.get("adapter", 0)), "-c", config["channels_file"], "-o", "-", channel],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
     def read(self, size=188 * 128):
@@ -29,10 +29,10 @@ class TelevisionStream:
 
 
 def status(config):
-    frontend = "/dev/dvb/adapter0/frontend0"
+    frontend = f"/dev/dvb/adapter{config.get('adapter', 0)}/frontend0"
     return {"frontend": frontend, "available": os.path.exists(frontend),
             "channels_file": config["channels_file"],
-            "standards": ["DVB-T", "DVB-T2", "DVB-C"]}
+            "standards": config.get("standards", ["DVB-T", "DVB-T2", "DVB-C"])}
 
 
 def open_channel(channel, config):

@@ -5,7 +5,7 @@ import subprocess
 
 
 def status(config):
-    device = config["radio_device"]
+    device = config["device"]
     return {"device": device, "available": os.path.exists(device)}
 
 
@@ -17,7 +17,7 @@ def tune(frequency_mhz, config):
     if not tool:
         raise RuntimeError("Required system program is missing: v4l2-ctl")
     try:
-        subprocess.run([tool, "-d", config["radio_device"], f"--set-freq={frequency_mhz:.2f}"],
+        subprocess.run([tool, "-d", config["device"], f"--set-freq={frequency_mhz:.2f}"],
                        check=True, timeout=5, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     except subprocess.CalledProcessError as error:
         raise RuntimeError(error.stderr.strip() or "FM tuner rejected the requested frequency") from error

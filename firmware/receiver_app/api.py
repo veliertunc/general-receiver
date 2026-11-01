@@ -40,20 +40,20 @@ class ReceiverHandler(BaseHTTPRequestHandler):
         query = urllib.parse.parse_qs(route.query)
         if route.path == "/status":
             self.send_json(200, {
-                "television": television.status(self.config),
-                "radio": radio.status(self.config),
+                "television": television.status(self.config["television"]),
+                "radio": radio.status(self.config["radio"]),
                 "ethernet": ethernet.status(),
                 "capabilities": ["DVB-T", "DVB-T2", "DVB-C", "FM", "IP multicast MPEG-TS"],
             })
         elif route.path == "/tv/status":
-            self.send_json(200, television.status(self.config))
+            self.send_json(200, television.status(self.config["television"]))
         elif route.path == "/radio/status":
-            self.send_json(200, radio.status(self.config))
+            self.send_json(200, radio.status(self.config["radio"]))
         elif route.path == "/ethernet/status":
             self.send_json(200, ethernet.status())
         elif route.path == "/tv.ts":
             try:
-                self.stream(television.open_channel(query.get("channel", [""])[0], self.config))
+                self.stream(television.open_channel(query.get("channel", [""])[0], self.config["television"]))
             except ValueError as error:
                 self.send_json(400, {"error": str(error)})
             except (OSError, RuntimeError) as error:
@@ -62,7 +62,7 @@ class ReceiverHandler(BaseHTTPRequestHandler):
             try:
                 group = query.get("group", [""])[0]
                 port = int(query.get("port", ["1234"])[0])
-                self.stream(ethernet.open_multicast(group, port, self.config))
+                self.stream(ethernet.open_multicast(group, port, self.config["ethernet"]))
             except ValueError as error:
                 self.send_json(400, {"error": str(error) or "Invalid UDP port"})
             except OSError as error:
@@ -81,7 +81,7 @@ class ReceiverHandler(BaseHTTPRequestHandler):
                 return self.send_json(413, {"error": "Request too large"})
             body = json.loads(self.rfile.read(size))
             frequency = float(body["frequency_mhz"])
-            self.send_json(200, radio.tune(frequency, self.config))
+            self.send_json(200, radio.tune(frequency, self.config["radio"]))
         except (ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
             self.send_json(400, {"error": str(error)})
         except (OSError, RuntimeError, TimeoutError) as error:
@@ -93,6 +93,7 @@ class ReceiverHandler(BaseHTTPRequestHandler):
 
 def serve(config):
     handler = type("ConfiguredReceiverHandler", (ReceiverHandler,), {"config": config})
-    address = (config.get("listen_address", "0.0.0.0"), int(config.get("listen_port", 8080)))
+    api_config = config.get("api", {})
+    address = (api_config.get("listen_address", "0.0.0.0"), int(api_config.get("listen_port", 8080)))
     print(f"Receiver API listening on {address[0]}:{address[1]}", flush=True)
     ThreadingHTTPServer(address, handler).serve_forever()
