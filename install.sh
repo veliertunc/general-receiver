@@ -9,11 +9,14 @@ fi
 apt-get update
 apt-get install -y python3 dvb-tools v4l-utils linux-firmware device-tree-compiler
 id receiver >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin --groups video,audio receiver
-install -d -m 0755 /opt/tv-receiver /etc/receiver
-for module in firmware/*.py; do
-    install -m 0644 "$module" "/opt/tv-receiver/$(basename "$module")"
+install -d -m 0755 /opt/tv-receiver/receiver_app/services /etc/receiver
+install -m 0755 firmware/receiver.py /opt/tv-receiver/receiver.py
+for module in firmware/receiver_app/*.py; do
+    install -m 0644 "$module" "/opt/tv-receiver/receiver_app/$(basename "$module")"
 done
-chmod 0755 /opt/tv-receiver/receiver.py
+for module in firmware/receiver_app/services/*.py; do
+    install -m 0644 "$module" "/opt/tv-receiver/receiver_app/services/$(basename "$module")"
+done
 install -m 0644 config/receiver.json /etc/receiver/receiver.json
 touch /etc/receiver/channels.conf
 chown root:video /etc/receiver/channels.conf

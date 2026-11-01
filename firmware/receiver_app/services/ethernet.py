@@ -1,8 +1,6 @@
-"""Ethernet interface status and multicast MPEG-TS reception."""
+"""Ethernet status and multicast MPEG-TS reception."""
 import ipaddress
 import socket
-
-from settings import CONFIG
 
 
 def status():
@@ -10,7 +8,7 @@ def status():
 
 
 class MulticastStream:
-    def __init__(self, group, port):
+    def __init__(self, group, port, config):
         try:
             address = ipaddress.ip_address(group)
         except ValueError as error:
@@ -24,7 +22,7 @@ class MulticastStream:
         try:
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.socket.bind(("", port))
-            interface = CONFIG.get("multicast_interface", "0.0.0.0")
+            interface = config.get("multicast_interface", "0.0.0.0")
             membership = socket.inet_aton(group) + socket.inet_aton(interface)
             self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership)
         except (OSError, ValueError):
@@ -38,5 +36,5 @@ class MulticastStream:
         self.socket.close()
 
 
-def open_multicast(group, port):
-    return MulticastStream(group, port)
+def open_multicast(group, port, config):
+    return MulticastStream(group, port, config)

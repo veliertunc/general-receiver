@@ -1,25 +1,23 @@
-"""FM tuner controls, independent of the HTTP server."""
+"""FM tuner status and controls."""
+import os
 import shutil
 import subprocess
 
-from settings import CONFIG
 
-
-def status():
-    import os
-    device = CONFIG["radio_device"]
+def status(config):
+    device = config["radio_device"]
     return {"device": device, "available": os.path.exists(device)}
 
 
-def tune(frequency_mhz):
-    low, high = CONFIG.get("fm_range_mhz", [87.5, 108.0])
+def tune(frequency_mhz, config):
+    low, high = config.get("fm_range_mhz", [87.5, 108.0])
     if not low <= frequency_mhz <= high:
         raise ValueError(f"FM frequency must be {low}-{high} MHz")
     tool = shutil.which("v4l2-ctl")
     if not tool:
         raise RuntimeError("Required system program is missing: v4l2-ctl")
     try:
-        subprocess.run([tool, "-d", CONFIG["radio_device"], f"--set-freq={frequency_mhz:.2f}"],
+        subprocess.run([tool, "-d", config["radio_device"], f"--set-freq={frequency_mhz:.2f}"],
                        check=True, timeout=5, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     except subprocess.CalledProcessError as error:
         raise RuntimeError(error.stderr.strip() or "FM tuner rejected the requested frequency") from error

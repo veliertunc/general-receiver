@@ -20,12 +20,13 @@ The CM4 and Si2168 capabilities are documented by their manufacturers: [Raspberr
 
 ## What the firmware does
 
-The software is split into three independent receiver services, with `firmware/receiver.py` acting only as the HTTP API/router:
+The software is organized as a package. `firmware/receiver.py` is a small startup entry point; `firmware/receiver_app/main.py` loads configuration; `firmware/receiver_app/api.py` owns HTTP routes; and `firmware/receiver_app/services/` contains the independently callable hardware services:
 
-- `firmware/television_service.py` checks the DVB frontend and starts `dvbv5-zap` for a channel stream.
-- `firmware/radio_service.py` checks and tunes the FM device through V4L2.
-- `firmware/ethernet_service.py` reports network interfaces and joins multicast groups to receive MPEG-TS.
-- `firmware/settings.py` loads shared configuration. Each media service can be imported and used independently of the HTTP server.
+- `services/television.py` checks the DVB frontend and starts `dvbv5-zap` for a channel stream.
+- `services/radio.py` checks and tunes the FM device through V4L2.
+- `services/ethernet.py` reports network interfaces and joins multicast groups to receive MPEG-TS.
+
+Configuration is passed into service calls rather than loaded globally, so a subsystem can be imported and used without starting the HTTP server.
 
 Linux's DVB device API, V4L2 radio API, and Ethernet sockets handle the hardware interface; kernel drivers perform tuner control and demodulation.
 

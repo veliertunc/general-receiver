@@ -3,18 +3,16 @@ import os
 import shutil
 import subprocess
 
-from settings import CONFIG
-
 
 class TelevisionStream:
-    def __init__(self, channel):
+    def __init__(self, channel, config):
         if not channel or len(channel) > 128:
             raise ValueError("Pass a channel name (up to 128 characters)")
         tool = shutil.which("dvbv5-zap")
         if not tool:
             raise RuntimeError("Required system program is missing: dvbv5-zap")
         self.process = subprocess.Popen(
-            [tool, "-a", "0", "-c", CONFIG["channels_file"], "-o", "-", channel],
+            [tool, "-a", "0", "-c", config["channels_file"], "-o", "-", channel],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
     def read(self, size=188 * 128):
@@ -30,12 +28,12 @@ class TelevisionStream:
                 self.process.wait()
 
 
-def status():
+def status(config):
     frontend = "/dev/dvb/adapter0/frontend0"
     return {"frontend": frontend, "available": os.path.exists(frontend),
-            "channels_file": CONFIG["channels_file"],
+            "channels_file": config["channels_file"],
             "standards": ["DVB-T", "DVB-T2", "DVB-C"]}
 
 
-def open_channel(channel):
-    return TelevisionStream(channel)
+def open_channel(channel, config):
+    return TelevisionStream(channel, config)
